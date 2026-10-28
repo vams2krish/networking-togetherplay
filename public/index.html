@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TogetherPlay · A little closer</title><link rel="stylesheet" href="/style.css"></head>
+<body><main><header><a href="/" class="brand">◉ TogetherPlay</a><span>FOR YOUR TIME TOGETHER</span></header>
+<section class="intro"><p class="eyebrow">DIFFERENT PLACES. SAME MOMENT.</p><h1>A little distance.<br>A lot of <em>together.</em></h1><p>Press play on your next date night. Watch a film or listen to a favorite track, in sync with your person.</p></section>
+<section class="room"><div class="roomhead"><h2>Your shared space</h2><span id="status" role="status">Connecting…</span></div><video id="player" controls playsinline preload="metadata"></video>
+<form id="sourceForm"><label for="source">A video or audio URL you both can access</label><div class="row"><input id="source" type="url" required placeholder="https://example.com/our-song.mp3"><button>Load media</button></div></form>
+<div class="actions"><button id="play" type="button">Play together</button><button id="pause" type="button" class="secondary">Pause</button><button id="invite" type="button" class="secondary">Copy invitation</button></div>
+<p id="message" role="status">Invite your person, load a direct media link, and press play.</p></section><footer>Made for two. Connected by a shared moment.<br><small>Direct MP4, WebM, MP3, and other browser-supported media. Streaming service page links are not supported.</small></footer></main><script type="module" src="/app.js"></script></body></html>
