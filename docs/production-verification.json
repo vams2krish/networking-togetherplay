@@ -1,0 +1,22 @@
+{
+  "target": "https://togetherplay-nine.vercel.app",
+  "verifiedAt": "2026-10-29T08:52:00.218Z",
+  "browser": "Chromium",
+  "checks": [
+    "HTTP health and durable production storage",
+    "Host creation and isolated partner join",
+    "Playback waits for both participants to enable audio",
+    "Audio media advances in both browsers; host-only guest controls disabled",
+    "Shared seeking and actual paused media state",
+    "Host unlocks playback; partner successfully starts playback",
+    "Host and partner reload preserve roles, media, and room membership",
+    "390px mobile layout has no horizontal overflow",
+    "External HTTPS video decodes and advances in both-member room",
+    "A third browser is denied entry to the two-person room",
+    "No uncaught browser JavaScript errors"
+  ],
+  "storage": "postgres",
+  "observedPlaybackDifferenceMs": 24,
+  "measurementNote": "One pair of asynchronous browser readings on the same test machine; not an internet synchronization benchmark.",
+  "status": "passed"
+}

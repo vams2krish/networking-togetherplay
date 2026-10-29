@@ -10,6 +10,8 @@
 
 Real browser captures of the running product, generated during end-to-end verification. Telemetry readings are individual observations, not synchronization benchmarks. Test room invitations expire after six hours.
 
+**Production verified October 29, 2026:** the gallery below was refreshed from the public production URL using isolated Chromium sessions. [Inspect the timestamped test evidence](docs/production-verification.json).
+
 ### A shared space, made for two
 
 ![TogetherPlay desktop room](docs/showcase/01-desktop-room.png)
@@ -39,6 +41,29 @@ Host-only controls are enforced by the server. Partners can enable audio and set
 ![Shared video playback](docs/showcase/06-video-playback.png)
 
 The video showcase uses the flower sample referenced in [MDN's video documentation](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/video). It loads directly from MDN; TogetherPlay does not redistribute that video. The built-in audio track is an original synthesized melody with no third-party samples, reproducible with `npm run demo:generate`.
+
+### A space reserved for two
+
+A third independent browser receives an explicit capacity message and cannot enter the room.
+
+![Two-person room capacity enforced in a third browser](docs/showcase/07-room-capacity.png)
+
+## Latest production verification
+
+The October 29 run targeted **https://togetherplay-nine.vercel.app**, with the health endpoint confirming PostgreSQL storage. It completed all eleven recorded checks with no uncaught browser JavaScript errors.
+
+| Flow                         | Verified result                                                                                          |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Room creation and invitation | Creator is host; a separate browser joins as partner.                                                    |
+| Readiness barrier            | Host media stays paused until the partner enables audio.                                                 |
+| Actual playback              | Audio advances in both browser sessions; external HTTPS video decodes and advances.                      |
+| Shared transport             | Seeking propagates; pause stops the partner's media element.                                             |
+| Permissions                  | Partner playback controls are disabled until the host unlocks them; the partner can then start playback. |
+| Recovery                     | Both browsers reload into their existing roles with the same media and room membership.                  |
+| Mobile                       | The 390px layout has no horizontal overflow.                                                             |
+| Capacity                     | A third independent browser is denied entry.                                                             |
+
+The [machine-readable evidence](docs/production-verification.json) records the UTC timestamp, target, storage mode, checked behaviors, and one observed playback difference. Both browsers ran on the same test machine over the public HTTPS/WSS service. This verifies the live product flow; it does not establish long-distance timing percentiles, real-phone compatibility, unclean-network recovery, or sustained production load capacity.
 
 ## Try it
 
@@ -152,6 +177,8 @@ npm run test:e2e
 ```
 
 Set `BASE_URL` to test a deployment. Optional `LIVE_VIDEO_URL` enables the additional video test/showcase. The standard browser suite uses only the original local audio and needs no external media origin. Browser tests intentionally regenerate screenshots in `docs/showcase/`.
+
+Set `PRODUCTION_VERIFY=1` when running against production to require PostgreSQL health and update `docs/production-verification.json`. Ordinary local/CI runs do not replace the recorded production evidence. The suite uses separate host, partner, and capacity-check browser contexts and includes a reload of both participating sessions.
 
 Coverage includes timeline math, URL validation, readiness pause/resume, permissions, stale revisions, capacity, expired sessions, foreign Origin rejection, separate-server state propagation, host recovery, actual media advancement, seeking, and mobile overflow. CI installs from the lockfile, audits production dependencies, runs backend tests, and runs Chromium end-to-end tests.
 
