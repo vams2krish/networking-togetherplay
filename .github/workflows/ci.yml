@@ -1,0 +1,22 @@
+name: Validate TogetherPlay
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm start > /tmp/togetherplay.log 2>&1 &
+      - run: node scripts/wait-for-server.js && npm run test:e2e

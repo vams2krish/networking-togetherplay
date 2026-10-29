@@ -1,111 +1,184 @@
 # Networking - TogetherPlay
 
-![TogetherPlay project illustration](docs/togetherplay.svg)
+**Different places. Same moment.** A synchronized video and audio room for long-distance couples, with durable room recovery, coordinated buffering, and live synchronization telemetry.
 
-**A synchronized video and audio player for long-distance couples.** TogetherPlay creates a shared room where two people can watch or listen to the same media, with synchronized play, pause, and seeking. Each device loads the media independently while a Node.js server coordinates playback over WebSockets.
+**[Open the live demo](https://togetherplay-nine.vercel.app)** · [Source code](https://github.com/vams2krish/networking-togetherplay)
 
-**Project type: Computer Networking / Distributed Systems / Full-stack Web Application.** This is **not an ML, deep learning (DL), or generative AI project**. Synchronization uses deterministic timing and networking logic; there is no model, training dataset, inference service, or AI API dependency.
+**Project type:** Computer Networking / Distributed Systems / Full-stack Web Application. This project does **not** use ML, deep learning, or generative AI. Coordination is deterministic; no model, training dataset, inference service, or AI API is required.
 
-The image above is a project illustration, not a screenshot or a claim of deployment.
+## Product showcase
 
-## Features
+Real browser captures of the running product, generated during end-to-end verification. Telemetry readings are individual observations, not synchronization benchmarks. Test room invitations expire after six hours.
 
-- Two-person rooms with randomly generated 128-bit invitation identifiers.
-- Shared media selection and play/pause/seek controls available to either partner.
-- Server-authoritative playback snapshots with revision numbers.
-- Clock-offset estimation from application-level ping/pong round trips.
-- Periodic playback correction when drift exceeds 350 milliseconds.
-- Automatic WebSocket reconnection and state recovery while the other participant remains connected.
-- Responsive interface, keyboard-accessible controls, and live connection messages.
-- Direct video and audio URLs supported by the browser's native media element.
+### A shared space, made for two
 
-## Run locally
+![TogetherPlay desktop room](docs/showcase/01-desktop-room.png)
 
-Install Node.js 22 or newer, then run:
+### Both people ready before the moment starts
+
+Playback waits until every connected participant enables audio and loads enough media. A buffering participant pauses the shared timeline; readiness resumes it.
+
+![Coordinated playback readiness](docs/showcase/02-coordinated-readiness.png)
+
+### Listening together, with live network readings
+
+![Two people playing the same track with synchronization telemetry](docs/showcase/03-playing-together.png)
+
+### Your partner's view
+
+Host-only controls are enforced by the server. Partners can enable audio and set local volume; the host may enable shared playback controls.
+
+![Partner view with host permissions enforced](docs/showcase/04-partner-view.png)
+
+### A room that fits your phone
+
+<img src="docs/showcase/05-mobile-room.png" alt="TogetherPlay mobile layout" width="390">
+
+### Video playback
+
+![Shared video playback](docs/showcase/06-video-playback.png)
+
+The video showcase uses the flower sample referenced in [MDN's video documentation](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/video). It loads directly from MDN; TogetherPlay does not redistribute that video. The built-in audio track is an original synthesized melody with no third-party samples, reproducible with `npm run demo:generate`.
+
+## Try it
+
+1. Open **[TogetherPlay](https://togetherplay-nine.vercel.app)** to create a room.
+2. Click **Copy invitation** and send it to your partner. Use a separate browser or device for their view.
+3. Click **Try the original demo track**, or load an accessible direct HTTPS media URL.
+4. Both people click **Enable my audio** to satisfy browser playback permission requirements.
+5. The host clicks **Play together**. Pause and seek affect the shared timeline.
+6. Uncheck **Host controls playback** to let either participant control playback.
+
+No signup is required. Invitations grant guest access to an available seat; keep them private. The host credential stays in that tab's session storage and is excluded from invitations. Reloading preserves it. Clearing session storage or changing browsers loses host privileges; create a new room in that case.
+
+## Roadmap delivered in v2
+
+| Step                  | Implemented behavior                                                                                                                                                                     |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Coordinated buffering | The server pauses while any active member is unready, then resumes requested playback when all are ready. New media invalidates old readiness messages.                                  |
+| Sync telemetry        | Round-trip latency, local drift before correction, connection count, and readiness count. Rounded participant measurements live in transient room state.                                 |
+| Host permissions      | Host-only playback by default. Only the host may change this setting.                                                                                                                    |
+| Expiry                | Fixed six-hour lifetime; expired rooms cannot be revived. Expired records are cleaned when a new room is created.                                                                        |
+| Abuse controls        | Two seats; ten creations per IP-derived identity per hour; 1,000 active rooms; per-instance connection caps; message rate limits; 4 KiB payloads; join timeout and bounded backpressure. |
+| Durable state         | PostgreSQL row locks serialize mutations. Shared database state and one-second reconciliation coordinate separate server instances.                                                      |
+| Recovery              | Exponential reconnect backoff with jitter, authoritative state reload, readiness re-establishment, and local pause on connection closure.                                                |
+| Live deployment       | HTTPS/WSS on Vercel, verified database TLS, health endpoint, CI, multi-instance database tests, two-browser audio/video verification, and mobile screenshots.                            |
+
+## Local setup
+
+Requires Node.js 22 or newer. CI and deployment use Node.js 24.
 
 ```sh
 npm ci
 npm start
 ```
 
-Open `http://localhost:3000`, copy the invitation, and open it in a second tab or browser. Load a direct MP4, WebM, MP3, or another supported media URL, then press **Play together**. The URL must return a media file, rather than an HTML page. Both users must be able to access it.
+Open `http://localhost:3000`. Development uses process memory when `DATABASE_URL` is absent. Production and Vercel require a database and fail at startup without one.
 
-For two devices on your local network, open `http://YOUR_LAN_IP:3000` on both devices and use the same invitation fragment. Clipboard access may require HTTPS; the app displays the invitation if copying fails. For long-distance use, host the server at a shared HTTPS address with WebSocket support. A localhost invitation only works on the same computer.
+For persistent local rooms, configure a gitignored `.env.local` from `.env.example`, then run:
 
-Set the `PORT` environment variable if your host requires a different port. No credentials or environment file are needed for local development.
+```sh
+node --env-file=.env.local server.js
+```
 
-## Networking concepts and architecture
+For LAN use, both devices open `http://YOUR_LAN_IP:3000` with the same invitation. Clipboard access may require HTTPS; a copy failure displays the invitation as text. A localhost invitation only works on the same computer.
+
+## Architecture and networking
 
 ```mermaid
 flowchart LR
-    A[Partner A browser] <-->|WebSocket control and timing| S[Node.js authoritative room server]
-    B[Partner B browser] <-->|WebSocket control and timing| S
-    M[Media origin] -->|HTTP media delivery| A
-    M -->|HTTP media delivery| B
+    A[Host browser] <-->|WSS commands and state| S1[Node instance A]
+    B[Partner browser] <-->|WSS commands and state| S2[Node instance B]
+    S1 <-->|Transactions and row locks| DB[(PostgreSQL)]
+    S2 <-->|Transactions and row locks| DB
+    M[HTTPS media origin] -->|Independent delivery| A
+    M -->|Independent delivery| B
 ```
 
-| Concept | Implementation |
-| --- | --- |
-| Client-server communication | WebSockets carry playback commands and state snapshots. |
-| Reliable ordered transport | WebSockets run over TCP; commands from one connection arrive in order. |
-| Authoritative state | The server serializes arriving commands and broadcasts the latest room snapshot. |
-| Clock synchronization | The client estimates server offset from a ping/pong midpoint and selects the lowest-RTT sample from its last ten samples. This is NTP-inspired, not a full NTP implementation. |
-| Latency compensation | A playing target advances by elapsed estimated server time since the snapshot. |
-| Drift correction | Clients check every three seconds and seek when their position differs by more than 0.35 seconds. |
-| Session isolation | Each invitation maps to an in-memory room, limited to two active connections. |
-| Recovery | Clients reconnect after 1.5 seconds and request current room state by joining again. |
-
-For a snapshot with position `p` and update time `t`, the playing target is:
+- **WebSockets over TCP:** reliable, ordered messages within each connection. Separate connections can reach different instances.
+- **Authoritative state:** room mutations use short database transactions with `SELECT ... FOR UPDATE`. Cross-instance reconciliation runs once per second for active rooms. This uses database polling, not pub/sub.
+- **Clock estimation:** application ping/pong messages estimate server time using the round-trip midpoint. The lowest-RTT sample among the latest ten determines the offset. This is NTP-inspired, not NTP.
+- **Drift correction:** every three seconds, clients compare media position to the authoritative timeline and seek if drift exceeds 350 ms. This threshold is a configuration value, not a measured timing guarantee.
+- **Readiness barrier:** playback requires a source, a requested play state, at least one active member, and readiness from every active member. Solo preview works; joining a second person introduces their readiness requirement.
+- **Presence leases:** transport pings run every 15 seconds; leases expire after 45 seconds. Clean disconnects pause immediately. Unclean failures can take longer to detect.
+- **HTTP range requests:** the built-in audio supports byte ranges for seeking.
 
 ```text
 estimatedServerNow = clientNow + estimatedClockOffset
-targetPosition = p + max(0, estimatedServerNow - t) / 1000
+playingTarget = savedPosition + max(0, estimatedServerNow - updatedAt) / 1000
+pausedTarget = savedPosition
 ```
 
-Paused snapshots retain `p`. Clients load the same URL and reconcile toward this timeline. There is no media relay, peer-to-peer streaming, WebRTC, STUN, or TURN in this implementation. TCP reliability does not guarantee simultaneous playback: decoding, buffering, browser policies, and asymmetric network delay still affect timing. The 350 ms correction threshold is a configured tolerance, not a measured synchronization guarantee.
+Cross-instance propagation, buffering, asymmetric network latency, and device decoding introduce delay. This does not provide sample-accurate audio synchronization. There is no WebRTC, STUN, TURN, or media relay.
 
-## Protocol
+## Protocol and security
 
-Messages are JSON. Clients send `join`, `ping`, `source`, `control`, or `refresh`; the server returns `state`, `pong`, or `error`.
+Clients send `create` or `join` with a random 256-bit session capability. The server stores its SHA-256 hash. Creating a room returns a random 128-bit room identifier; joining a missing room never creates one. The creator's hashed capability grants host privileges. Connection identifiers prevent a replaced socket from removing its replacement session.
+
+Other messages are `ping`, `source`, `control`, `settings`, `ready`, and `telemetry`; responses are `joined`, `state`, `pong`, and `error`. Playback and readiness commands include a source revision. Snapshots exclude credential hashes, connection identifiers, and raw IPs.
 
 ```json
-{"type":"control","playing":true,"position":42.5}
+{ "type": "control", "playing": true, "position": 12.5, "sourceRevision": 1 }
 ```
 
-A state contains `source`, `playing`, `position`, `updatedAt`, `revision`, and `members`. The last valid command received by the server wins. A late joiner receives the current snapshot. The room is deleted when its final connection leaves; state does not survive a server restart.
+Data lives in an isolated `togetherplay` schema in the existing DuetSync Supabase project. It is not exposed through Supabase's Data API. RLS policies restrict application access to a dedicated `togetherplay_backend` database role with grants on only the two application tables. The application does not use a database administrator or Supabase service-role key. Queries are parameterized, pools are bounded, and database TLS verifies the CA and hostname using the public Supabase certificate in `certs/`.
 
-## Source layout
+HTTP responses include CSP, no-referrer, nosniff, anti-framing, and restrictive camera/microphone/geolocation policies. Selected media must use HTTPS, except the fixed built-in `/demo.wav` asset. Credential-bearing URL userinfo is rejected. Browser WebSocket origins must match the current host, or optional exact `APP_ORIGIN`. Native clients may omit Origin but still require valid room/session capabilities.
 
-```text
-server.js              HTTP and WebSocket room server
-sync.js                Timing helper and source validation
-public/index.html      Player interface
-public/app.js          Client connection, clock estimation, synchronization
-public/style.css       Responsive styling
-docs/togetherplay.svg  Original project cover illustration
-test/                  Unit and two-client integration tests
-```
+## Deployment and operations
+
+The demo uses Vercel Fluid Compute and an exported Node.js HTTP server with `ws`; see [Vercel's WebSocket documentation](https://vercel.com/docs/functions/websockets). Durable external state is necessary because separate connections and reconnects may reach different instances.
+
+1. Provision a dedicated database login named `togetherplay_backend` with a securely generated password, no superuser/database-creation/role-creation privileges, a short statement timeout, and database `CONNECT` permission.
+2. Apply `db/schema.sql` as an administrator once. It creates only TogetherPlay's schema, tables, indexes, policies, and restricted grants. Never put passwords in this script.
+3. Set server-only **Secret** environment variables `DATABASE_URL` and `RATE_LIMIT_SALT` in Vercel. Copy the transaction pooler host from the database's Connect dialog and use the custom database role's username. Never expose these variables to browser code.
+4. Link the intended Vercel project and verify the owner and project before deploying.
+5. Stage with `vercel deploy --prod --skip-domain`, test the returned URL, then `vercel promote <tested-url>`.
+6. Check `GET /healthz` returns `{"status":"ok","storage":"postgres"}` and run the browser suite against the public address.
+
+`APP_ORIGIN` optionally pins one accepted browser origin. `RATE_LIMIT_SALT` hashes the IP-derived creation quota identity. The application avoids logging tokens, media URLs, raw IP addresses, and connection strings. Vercel function duration is 300 seconds: clients reconnect on function rotation and reload persistent state. The function runs in `sfo1`, near the database. Self-managed hosts can run `npm start` behind HTTPS with WebSocket upgrades enabled.
+
+**Operational boundaries:** this is a deployed, tested demo with production safeguards, not an audited or load-certified commercial service. External uptime alerting, log drains, large-scale load testing, an incident response process, and broad browser/device certification are not configured. The health endpoint is available for monitoring. Cleanup is admission-driven, so expired data may remain until the next room creation. Configure backups and retention requirements before collecting sensitive data.
 
 ## Verification
 
 ```sh
 npm test
+# Include the database integration test:
+node --env-file=.env.local --test test/server.test.js
+# Against a running local server:
+npx playwright install chromium
+npm run test:e2e
 ```
 
-Tests cover timeline calculations, URL validation, HTTP delivery, two-client state propagation, room capacity, and separation between rooms. Manual browser verification should include loading a real media file, enabling playback on both browsers, pausing, seeking, joining late, and reconnecting. Automated protocol tests do not prove browser playback quality or internet synchronization accuracy.
+Set `BASE_URL` to test a deployment. Optional `LIVE_VIDEO_URL` enables the additional video test/showcase. The standard browser suite uses only the original local audio and needs no external media origin. Browser tests intentionally regenerate screenshots in `docs/showcase/`.
 
-## Deployment and limitations
+Coverage includes timeline math, URL validation, readiness pause/resume, permissions, stale revisions, capacity, expired sessions, foreign Origin rejection, separate-server state propagation, host recovery, actual media advancement, seeking, and mobile overflow. CI installs from the lockfile, audits production dependencies, runs backend tests, and runs Chromium end-to-end tests.
 
-This is a runnable prototype, not a production-hardened service. Use HTTPS/WSS behind a reverse proxy, forward WebSocket upgrades, and run one server instance: rooms live in process memory. Multiple instances require shared state and a pub/sub layer, with explicit command ordering. Host on a service supporting a continuously running Node.js process and persistent WebSocket connections; static hosting alone cannot run the server.
+## Source layout
 
-- Invitation links act as bearer access: anyone holding one can join if a slot is available and can control playback. There are no accounts, host permissions, or password protection.
-- The server limits payload size and per-connection message frequency, but does not implement global connection quotas or comprehensive abuse protection.
-- Media URLs are visible to the room's participants and server. Avoid URLs containing private access tokens. The server does not download or proxy the media.
-- Browser autoplay may require each person to click Play. Buffering is local and does not automatically pause the other device.
-- YouTube, Netflix, Spotify, DRM content, and service page links are not integrated. Use media you have permission to access and share.
-- No chat, voice calls, uploads, persistent rooms, or playlist management is implemented.
-- Public hosting, HTTPS configuration, and real-world latency measurements are not included.
+```text
+api/ws.js              Vercel entrypoint
+server.js              Standalone Node entrypoint
+web-server.js          HTTP, upgrades, queues, leases, reconciliation
+room.js                Room state machine and public snapshot projection
+store.js               Development memory and transactional PostgreSQL stores
+sync.js                Timeline calculations and URL validation
+public/                Player interface and original demo audio
+certs/                 Public Supabase database CA certificate
+scripts/               Demo synthesis and CI server readiness checks
+db/schema.sql          Isolated schema, indexes, RLS, restricted grants
+test/                  Unit, protocol, origin, database integration tests
+e2e/                   Browser flow and screenshot generation
+docs/showcase/         Real product screenshots
+```
 
-## Future work
+## Remaining roadmap
 
-Add coordinated buffering/readiness, measured synchronization telemetry, room expiry and abuse controls, optional host-only controls, and durable shared state for multiple servers. These are planned enhancements, not current features.
+- Distributed pub/sub to replace one-second reconciliation and reduce database writes and propagation delay.
+- Scheduled expiry cleanup and quota retention.
+- Room passwords, invitation revocation, optional accounts, and host transfer.
+- Captions/subtitles, playback speed, accessible fullscreen, and playlists.
+- External uptime/error alerts, load testing, synchronization percentile measurements, and Safari/Firefox/mobile-device coverage.
+
+Netflix, Spotify, YouTube page links, DRM content, uploads, calls, and chat are not integrated. Use direct media you have permission to access. The room server and both participants can see selected URLs; avoid URLs containing private credentials. Invitations can be forwarded and grant a free guest seat. Host capabilities are tab-scoped rather than account-backed. Both browsers depend on the media origin remaining accessible.

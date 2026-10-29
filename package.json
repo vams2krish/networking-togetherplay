@@ -1,9 +1,23 @@
 {
   "name": "networking-togetherplay",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node server.js", "test": "node --test" },
-  "engines": { "node": ">=22" },
-  "dependencies": { "ws": "^8.18.0" }
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "test:e2e": "playwright test",
+    "demo:generate": "node scripts/generate-demo.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "pg": "8.23.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "prettier": "3.9.10"
+  }
 }

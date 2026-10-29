@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "fluid": true,
+  "regions": ["sfo1"],
+  "functions": {
+    "api/ws.js": { "maxDuration": 300, "includeFiles": "{public/**,certs/**}" }
+  },
+  "rewrites": [{ "source": "/(.*)", "destination": "/api/ws" }]
+}

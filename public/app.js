@@ -1,48 +1,279 @@
-const $ = id => document.getElementById(id);
-const player = $('player');
-let room = location.hash.slice(1);
-if (!/^[a-f0-9]{32}$/.test(room)) { room = Array.from(crypto.getRandomValues(new Uint8Array(16)), x => x.toString(16).padStart(2,'0')).join(''); location.hash = room; }
-let socket, state, offset = 0, samples = [], applyingUntil = 0, reconnect;
-const say = text => $('message').textContent = text;
-function send(message) { if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); else say('Reconnecting. Please try again once connected.'); }
-function target() { return state.position + (state.playing ? Math.max(0, Date.now() + offset - state.updatedAt) / 1000 : 0); }
+const $ = (id) => document.getElementById(id),
+  player = $("player");
+const random = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(32)), (x) =>
+    x.toString(16).padStart(2, "0"),
+  ).join("");
+let room = location.hash.slice(1),
+  socket,
+  state,
+  offset = 0,
+  samples = [],
+  rtt = 0,
+  reconnect,
+  attempt = 0,
+  enabled = false,
+  lastReady = null,
+  stopped = false,
+  applying = false;
+if (room && !/^[a-f0-9]{32}$/.test(room)) {
+  room = "";
+  history.replaceState(null, "", location.pathname);
+}
+let token;
+try {
+  token = sessionStorage.getItem(`togetherplay:${room}`) || random();
+} catch {
+  token = random();
+}
+const say = (text) => ($("message").textContent = text);
+const time = (value) => {
+  value = Math.max(0, Number.isFinite(value) ? value : 0);
+  return `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, "0")}`;
+};
+function send(msg) {
+  if (socket?.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(msg));
+    return true;
+  }
+  return false;
+}
+function target() {
+  return (
+    state.position +
+    (state.playing
+      ? Math.max(0, Date.now() + offset - state.updatedAt) / 1000
+      : 0)
+  );
+}
+function ready(value, force = false) {
+  if (!state?.source) return;
+  if (force || lastReady !== value) {
+    lastReady = value;
+    send({ type: "ready", ready: value, sourceRevision: state.sourceRevision });
+  }
+}
+function canControl() {
+  return state && (!state.hostOnly || state.isHost);
+}
+function render() {
+  $("role").textContent = state.isHost ? "Host" : "Partner";
+  $("status").textContent = `${state.members}/2 connected`;
+  $("presence").textContent = `${state.members} / 2`;
+  $("readiness").textContent = `${state.ready} / ${state.members}`;
+  $("hostOnly").checked = state.hostOnly;
+  $("hostOnly").disabled = !state.isHost;
+  for (const name of ["load", "demo", "source"])
+    $(name).disabled = !canControl();
+  for (const name of ["play", "pause", "seek"])
+    $(name).disabled = !canControl() || !state.source;
+  $("invite").disabled = false;
+  $("expiry").textContent =
+    `Private invitation · expires ${new Date(state.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  $("playback").textContent = state.playing
+    ? "PLAYING TOGETHER"
+    : state.requested
+      ? "WAITING FOR EVERYONE"
+      : "PAUSED TOGETHER";
+  if (state.source) {
+    $("mediaTitle").textContent = state.source.endsWith("/demo.wav")
+      ? "An evening, together"
+      : "Your shared soundtrack";
+    $("mediaSubtitle").textContent = state.playing
+      ? "Same song. Same moment."
+      : state.requested
+        ? "Waiting for audio and buffering readiness."
+        : "A little closer, one play at a time.";
+  }
+}
 async function apply() {
   if (!state?.source || player.readyState < 1) return;
-  applyingUntil = Date.now() + 600;
-  const time = Math.min(target(), Number.isFinite(player.duration) ? player.duration : Infinity);
-  if (Math.abs(player.currentTime - time) > 0.35) player.currentTime = time;
-  if (state.playing) { try { await player.play(); } catch { say('Your browser needs a click: press Play together to enable playback.'); } }
-  else player.pause();
+  const t = Math.min(
+    target(),
+    Number.isFinite(player.duration) ? player.duration : Infinity,
+  );
+  applying = true;
+  if (Math.abs(player.currentTime - t) > 0.35) player.currentTime = t;
+  if (state.playing && enabled) {
+    try {
+      await player.play();
+      if (!state.playing) player.pause();
+    } catch {
+      ready(false);
+      say("Click Enable my audio to allow playback in this browser.");
+    }
+  } else player.pause();
+  applying = false;
 }
 function connect() {
-  socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`);
-  socket.onopen = () => { send({ type:'join',room }); ping(); };
-  socket.onmessage = event => {
+  if (stopped) return;
+  socket = new WebSocket(
+    `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/ws`,
+  );
+  socket.onopen = () => {
+    attempt = 0;
+    samples = [];
+    lastReady = null;
+    send({ type: room ? "join" : "create", room, token });
+    send({ type: "ping", sent: Date.now() });
+  };
+  socket.onmessage = (event) => {
     const msg = JSON.parse(event.data);
-    if (msg.type === 'error') return say(msg.message);
-    if (msg.type === 'pong') {
-      const rtt = Date.now() - msg.sent;
-      samples.push({ rtt, offset:msg.server - (msg.sent + rtt/2) }); samples = samples.slice(-10);
-      offset = [...samples].sort((a,b)=>a.rtt-b.rtt)[0].offset; return;
+    if (msg.type === "joined") {
+      room = msg.room;
+      history.replaceState(null, "", `#${room}`);
+      try {
+        sessionStorage.setItem(`togetherplay:${room}`, token);
+      } catch {}
+      say(
+        "Invite your person, choose a track, and enable audio on both devices.",
+      );
+      return;
     }
-    if (msg.type !== 'state') return;
-    state = msg; $('status').textContent = `${msg.members}/2 connected · synchronized room`;
-    if (msg.source && player.getAttribute('src') !== msg.source) { player.src = msg.source; $('source').value = msg.source; }
+    if (msg.type === "error") {
+      say(msg.message);
+      if (["expired", "full", "session"].includes(msg.code)) {
+        stopped = true;
+        socket.close();
+        $("status").textContent = "Room unavailable";
+      }
+      return;
+    }
+    if (msg.type === "pong") {
+      const elapsed = Date.now() - msg.sent;
+      samples.push({
+        rtt: elapsed,
+        offset: msg.server - (msg.sent + elapsed / 2),
+      });
+      samples = samples.slice(-10);
+      const best = [...samples].sort((a, b) => a.rtt - b.rtt)[0];
+      offset = best.offset;
+      rtt = elapsed;
+      $("latency").textContent = `${Math.round(rtt)} ms`;
+      return;
+    }
+    if (msg.type !== "state") return;
+    const changed = state?.sourceRevision !== msg.sourceRevision;
+    state = msg;
+    if (!samples.length) offset = msg.serverNow - Date.now();
+    if (changed && msg.source) {
+      lastReady = null;
+      player.src = msg.source;
+      $("source").value = msg.source;
+      player.load();
+      say("Media loaded. Enable your audio, then press Play together.");
+    }
+    render();
+    ready(enabled && player.readyState >= 3);
     apply();
   };
-  socket.onclose = () => { $('status').textContent = 'Reconnecting…'; clearTimeout(reconnect); reconnect = setTimeout(connect,1500); };
+  socket.onclose = () => {
+    player.pause();
+    if (stopped) return;
+    $("status").textContent = "Reconnecting…";
+    for (const name of ["play", "pause", "load", "demo", "invite", "seek"])
+      $(name).disabled = true;
+    clearTimeout(reconnect);
+    reconnect = setTimeout(
+      connect,
+      Math.min(15000, 750 * 2 ** attempt++) + Math.random() * 300,
+    );
+  };
   socket.onerror = () => socket.close();
 }
-function ping() { send({type:'ping',sent:Date.now()}); }
-function control(playing) { send({type:'control',playing,position:player.currentTime}); }
-$('sourceForm').onsubmit = event => { event.preventDefault(); send({type:'source',source:$('source').value}); };
-$('play').onclick = () => { if (!state?.source) return say('Load a direct media URL first.'); player.play().catch(()=>say('Unable to play this media. Check the URL and format.')); control(true); };
-$('pause').onclick = () => control(false);
-player.onloadedmetadata = apply;
-player.onseeked = () => { if (Date.now() > applyingUntil) control(!player.paused); };
-player.onplay = () => { if (Date.now() > applyingUntil) control(true); };
-player.onpause = () => { if (Date.now() > applyingUntil && !player.ended) control(false); };
-player.onerror = () => say('Media could not load. Use a publicly accessible direct media URL supported by your browser.');
-$('invite').onclick = async () => { try { await navigator.clipboard.writeText(location.href); say('Invitation copied. Send it to your person.'); } catch { say(`Copy this invitation: ${location.href}`); } };
-setInterval(() => { if (socket?.readyState === WebSocket.OPEN) { ping(); apply(); } },3000);
+function control(playing, position = player.currentTime) {
+  if (canControl())
+    send({
+      type: "control",
+      playing,
+      position,
+      sourceRevision: state.sourceRevision,
+    });
+}
+$("enable").onclick = async () => {
+  enabled = true;
+  if (state?.source) {
+    try {
+      await player.play();
+      if (!state.playing) player.pause();
+      ready(player.readyState >= 3, true);
+      say("Your audio is enabled. You are ready to listen together.");
+    } catch {
+      enabled = false;
+      ready(false);
+      say("Audio could not start. Check that the media can be played.");
+    }
+  } else say("Audio enabled for this session. Choose a track to get ready.");
+  $("enable").textContent = enabled ? "✓ Audio enabled" : "Enable my audio";
+};
+$("play").onclick = async () => {
+  if (!enabled) await $("enable").onclick();
+  if (enabled) control(true);
+};
+$("pause").onclick = () => control(false);
+$("sourceForm").onsubmit = (e) => {
+  e.preventDefault();
+  if (canControl()) send({ type: "source", source: $("source").value });
+};
+$("demo").onclick = () => send({ type: "source", source: "/demo.wav" });
+$("hostOnly").onchange = () =>
+  send({ type: "settings", hostOnly: $("hostOnly").checked });
+$("seek").onchange = () => control(state.requested, Number($("seek").value));
+$("volume").oninput = () => {
+  player.volume = Number($("volume").value);
+};
+player.volume = 0.7;
+player.oncanplay = () => {
+  ready(enabled, true);
+  apply();
+};
+player.onwaiting = () => {
+  if (!applying) ready(false);
+};
+player.onloadedmetadata = () => {
+  $("duration").textContent = time(player.duration);
+  $("seek").max = Number.isFinite(player.duration) ? player.duration : 0;
+  $("stageart").hidden = player.videoWidth > 0;
+  apply();
+};
+player.onended = () => {
+  ready(false);
+  if (canControl()) control(false, player.duration);
+};
+player.onerror = () => {
+  ready(false);
+  say(
+    "This media could not load. Try a direct HTTPS media file or the demo track.",
+  );
+};
+$("invite").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(location.href);
+    say("Invitation copied. Send it to your person.");
+  } catch {
+    say(`Share this invitation: ${location.href}`);
+  }
+};
+setInterval(() => {
+  if (socket?.readyState === WebSocket.OPEN) {
+    send({ type: "ping", sent: Date.now() });
+    if (state?.source && player.readyState >= 1) {
+      const drift = player.currentTime - target();
+      $("drift").textContent = `${Math.round(drift * 1000)} ms`;
+      send({ type: "telemetry", drift, rtt });
+      apply();
+    }
+  }
+}, 3000);
+setInterval(() => {
+  if (player.readyState >= 1) {
+    $("elapsed").textContent = time(player.currentTime);
+    if (document.activeElement !== $("seek"))
+      $("seek").value = player.currentTime;
+  }
+}, 250);
+window.addEventListener("offline", () => {
+  player.pause();
+  say("You are offline. Playback will reconnect when your connection returns.");
+});
 connect();

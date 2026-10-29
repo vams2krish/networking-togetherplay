@@ -1,8 +1,155 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TogetherPlay · A little closer</title><link rel="stylesheet" href="/style.css"></head>
-<body><main><header><a href="/" class="brand">◉ TogetherPlay</a><span>FOR YOUR TIME TOGETHER</span></header>
-<section class="intro"><p class="eyebrow">DIFFERENT PLACES. SAME MOMENT.</p><h1>A little distance.<br>A lot of <em>together.</em></h1><p>Press play on your next date night. Watch a film or listen to a favorite track, in sync with your person.</p></section>
-<section class="room"><div class="roomhead"><h2>Your shared space</h2><span id="status" role="status">Connecting…</span></div><video id="player" controls playsinline preload="metadata"></video>
-<form id="sourceForm"><label for="source">A video or audio URL you both can access</label><div class="row"><input id="source" type="url" required placeholder="https://example.com/our-song.mp3"><button>Load media</button></div></form>
-<div class="actions"><button id="play" type="button">Play together</button><button id="pause" type="button" class="secondary">Pause</button><button id="invite" type="button" class="secondary">Copy invitation</button></div>
-<p id="message" role="status">Invite your person, load a direct media link, and press play.</p></section><footer>Made for two. Connected by a shared moment.<br><small>Direct MP4, WebM, MP3, and other browser-supported media. Streaming service page links are not supported.</small></footer></main><script type="module" src="/app.js"></script></body></html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="A shared listening room for two. Watch and listen together across the distance."
+    />
+    <meta name="theme-color" content="#171c1c" />
+    <title>TogetherPlay · A little closer</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <a href="/" class="brand">◉ TogetherPlay</a
+        ><span>FOR YOUR TIME TOGETHER</span
+        ><a class="newroom" href="/">New room ↗</a>
+      </header>
+      <section class="intro">
+        <p class="eyebrow">DIFFERENT PLACES. SAME MOMENT.</p>
+        <h1>A little distance.<br />A lot of <em>together.</em></h1>
+        <p>
+          Press play on your next date night. A shared space for your favorite
+          songs, films, and the moments in between.
+        </p>
+      </section>
+      <section class="room">
+        <div class="roomhead">
+          <div>
+            <p class="eyebrow">YOUR PRIVATE LISTENING ROOM</p>
+            <h2>
+              Your shared space <span id="role" class="badge">Connecting</span>
+            </h2>
+          </div>
+          <span id="status" role="status">Connecting…</span>
+        </div>
+        <div class="stage">
+          <video
+            id="player"
+            playsinline
+            preload="auto"
+            aria-label="Shared media player"
+          ></video>
+          <div class="stageart" id="stageart">
+            <div class="orbit">♫</div>
+            <p id="mediaTitle">Your next favorite moment</p>
+            <small id="mediaSubtitle"
+              >Load a song or film. We'll keep you together.</small
+            >
+          </div>
+          <span id="playback" class="playback">READY WHEN YOU ARE</span>
+        </div>
+        <div class="timeline">
+          <label for="seek" class="sr-only">Playback position</label
+          ><input
+            id="seek"
+            type="range"
+            min="0"
+            max="100"
+            step="0.1"
+            value="0"
+            disabled
+          />
+          <div class="time">
+            <span id="elapsed">0:00</span><span id="duration">0:00</span>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="enable" type="button">Enable my audio</button
+          ><button id="play" type="button" disabled>▶ Play together</button
+          ><button id="pause" type="button" class="secondary" disabled>
+            Pause</button
+          ><button id="invite" type="button" class="secondary" disabled>
+            Copy invitation ↗
+          </button>
+        </div>
+        <div class="volume">
+          <label for="volume">Your volume</label
+          ><input
+            id="volume"
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value="0.7"
+          />
+        </div>
+        <p id="message" role="status">Creating your shared space…</p>
+        <form id="sourceForm">
+          <label for="source">A video or audio URL you both can access</label>
+          <div class="row">
+            <input
+              id="source"
+              type="url"
+              required
+              placeholder="https://example.com/our-song.mp3"
+            /><button id="load" disabled>Load media</button>
+          </div>
+        </form>
+        <div class="extras">
+          <button id="demo" class="textbutton" type="button" disabled>
+            ♫ Try the original demo track</button
+          ><label class="toggle"
+            ><input id="hostOnly" type="checkbox" checked disabled /> Host
+            controls playback</label
+          >
+        </div>
+        <div class="metrics" aria-label="Live synchronization telemetry">
+          <div><span>TOGETHER</span><strong id="presence">— / 2</strong></div>
+          <div><span>READY</span><strong id="readiness">—</strong></div>
+          <div><span>ROUND TRIP</span><strong id="latency">—</strong></div>
+          <div><span>LOCAL DRIFT</span><strong id="drift">—</strong></div>
+        </div>
+        <p class="privacy" id="expiry">
+          Private invitation · two people · six-hour room
+        </p>
+      </section>
+      <section class="how">
+        <div>
+          <b>01</b>
+          <h3>Invite your person</h3>
+          <p>Send your room link. Your host controls stay on this device.</p>
+        </div>
+        <div>
+          <b>02</b>
+          <h3>Find your soundtrack</h3>
+          <p>Load a direct media link, or try our original demo track.</p>
+        </div>
+        <div>
+          <b>03</b>
+          <h3>Make time together</h3>
+          <p>
+            Enable audio on both devices. Playback waits while either of you
+            buffers.
+          </p>
+        </div>
+      </section>
+      <footer>
+        Made for two. Connected by a shared moment.<br /><small
+          >Direct media files only. Streaming service page links and DRM content
+          aren't supported.<br />Live sync readings describe current device
+          conditions; exact simultaneous playback isn't guaranteed.</small
+        ><a
+          href="https://github.com/vams2krish/networking-togetherplay"
+          target="_blank"
+          rel="noreferrer"
+          >Explore the project ↗</a
+        >
+      </footer>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
